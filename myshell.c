@@ -84,6 +84,18 @@ int execute(char* cmd, char* argv[], char* input_file, char* output_file, int ap
 		char* path_copy = strdup(path);
 		char* start = strtok(path_copy, ":");
 		
+		// handle ~ in arguments
+		
+		char* home = getenv("HOME");
+				
+		for(int i = 0; argv[i] != NULL; i++){
+            if(argv[i][0] == '~'){
+                char expanded_arg[MAX_LENGTH];
+                snprintf(expanded_arg, sizeof(expanded_arg), "%s%s", home, argv[i] + 1);
+                argv[i] = strdup(expanded_arg);
+            }
+        }
+		
 		while(start != NULL){
 			char full_exec_path[MAX_LENGTH];
 			// searching for executable file --> /usr/bin/ls
