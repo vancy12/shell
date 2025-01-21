@@ -3,17 +3,20 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #define MAX_LENGTH 1024
 #define MAX_ARGS 100
 
-char prompt[MAX_LENGTH] = "\\w$";
+char prompt[MAX_LENGTH] = "\"\\w$\"";
 char cwd[MAX_LENGTH];
 char path[MAX_LENGTH] = "/usr/bin:/bin:/sbin";
 
 void show_prompt(){
 	// if it is default prompt show cwd
-	if(strcmp(prompt, "\\w$") == 0){
+	if(strcmp(prompt, "\"\\w$\"") == 0){
 		if(getcwd(cwd, MAX_LENGTH) != NULL){
 			printf("%s$ ", cwd);
 		}
@@ -24,10 +27,80 @@ void show_prompt(){
 }
 
 void change_directory(char* dir){
+	// if only cd is given
+	if(dir == NULL){
+		char* home = getenv("HOME");
+		if(!home){
+			printf("HOME environment variable not set\n");
+		}
+		chdir(home);
+	}
+	// else if path given
+	else
+		chdir(dir);
+	
 	return;
 }
 
 int execute(char* cmd, char* argv[], char* input_file, char* output_file, int append){
+
+	int pid = fork();
+	if(pid < 0){
+		printf("Fork error!");
+		exit(EXIT_FAILURE);
+	}
+	// child process
+	else if(pid == 0){
+		// if input redirection
+		if(input_file){
+			int fd_1 = open(input_file, O_RDONLY);
+			if(fd_1 < 0){
+				printf("input redirection error!\n");
+				exit(EXIT_FAILURE);
+			}
+			// old file descriptor -> new file descriptor
+			dup2(fd_1, STDIN_FILENO);
+			close(fd_1);
+		}
+		
+		if(output_file){
+			int fd_2;
+			
+			if(append)
+				fd_2 = open(output_file, O_WRONLY | O_CREAT | O_APPEND);
+			else
+				fd_2 = open(output_file, O_WRONLY | O_CREAT | O_TRUNC);
+				
+			if(fd_2 < 0){
+				printf("output redirection error!\n");
+				exit(EXIT_FAILURE);
+			}
+			// old file descriptor -> new file descriptor
+			dup2(fd_2, STDOUT_FILENO);
+			close(fd_2);
+		}
+		
+		// execvp using execv
+		char* path_copy = strdup(path);
+		char* start = strtok(path_copy, ":");
+		
+		while(start != NULL){
+			char full_exec_path[MAX_LENGTH];
+			// searching for executable file --> /usr/bin/ls
+			// /usr/bin --> start and ls --> cmd
+			snprintf(full_exec_path, sizeof(full_exec_path), "%s/%s", start, cmd);
+			execv(full_exec_path, argv);
+			start = strtok(NULL, ":");
+		}
+	}
+	
+	// parent process
+	else{
+		int wstatus;
+		waitpid(pid, &wstatus, 0);
+		return WEXITSTATUS(wstatus);
+	}
+	
 	return 0;
 }
 
@@ -53,6 +126,7 @@ int parse_input(char input[]){
     		output_file = strtok(output_redirection + 2, " ");
     	}
     	else{
+    		append = 0;
     		*output_redirection = '\0';
     		output_file = strtok(output_redirection + 1, " ");
     	}
@@ -77,16 +151,16 @@ int parse_input(char input[]){
     argv[argument_count] = NULL;
     
     // debug
-   	int i =0;
+   	/*int i =0;
    	while(argv[i] != NULL){
    		printf("%s ", argv[i]);
    		i++;
    	}
-   	printf("\n");
+   	printf("\n");*/
    	
    	// special commands
    	if(strcmp(argv[0], "exit") == 0){
-   		printf("\nExiting...\n");
+   		printf("Exiting...\n");
    		exit(0);
    	}
    	else if(strcmp(argv[0], "cd") == 0){
@@ -115,7 +189,7 @@ int main(){
 		//printf("prompt>");
 		show_prompt();
 		if(fgets(input, MAX_LENGTH, stdin) == NULL){
-			printf("\nExiting...\n");
+			printf("Exiting...\n");
 			exit(0);
 		}
 		int index = strcspn(input, "\n");
