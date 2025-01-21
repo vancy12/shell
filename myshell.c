@@ -22,22 +22,35 @@ void show_prompt(){
 		}
 	}
 	else{
-		printf("%s$ ", prompt);
+		printf("%s ", prompt);
 	}
 }
 
 void change_directory(char* dir){
 	// if only cd is given
+	char* home = getenv("HOME");
 	if(dir == NULL){
-		char* home = getenv("HOME");
 		if(!home){
 			printf("HOME environment variable not set\n");
+			return;
 		}
 		chdir(home);
 	}
 	// else if path given
-	else
+	else{
+		
+		if(dir[0] == '~'){
+			if(!home){
+				printf("HOME environment variable not set\n");
+				return;
+			}
+			char expanded_path[MAX_LENGTH];
+			snprintf(expanded_path, sizeof(expanded_path), "%s/%s", home, dir + 1);
+			dir = strdup(expanded_path);
+		}
 		chdir(dir);
+	}
+		
 	
 	return;
 }
@@ -184,7 +197,14 @@ int parse_input(char input[]){
    		return 0;
    	}
    	else if(strncmp(argv[0], "PS1=", 4) == 0){
-   		strcpy(prompt, argv[0] + 4);
+   		char* temp_prompt = argv[0] + 4;
+   		
+   		if(strcmp(temp_prompt,"\"\\w$\"") && temp_prompt[0] == '"' && temp_prompt[strlen(temp_prompt) - 1] == '"'){
+   			temp_prompt[strlen(temp_prompt) - 1] = '\0';
+   			temp_prompt++;
+   		}
+   		
+   		strcpy(prompt, temp_prompt);
    		return 0;
    	}
    	
